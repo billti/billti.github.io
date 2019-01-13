@@ -4,7 +4,7 @@ title: Test
 permalink: /test/
 ---
 
-#Test page for navigation
+# Test page for navigation
 
 Write some TypeScript
 
