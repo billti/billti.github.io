@@ -1,5 +1,6 @@
 ---
 layout: page
+permalink: /another-page
 ---
 Write some cool code!
 
