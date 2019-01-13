@@ -1,5 +1,6 @@
 ---
 layout: page
+title: "C++"
 permalink: /another-page
 ---
 Write some cool code!
