@@ -3,12 +3,12 @@ layout: page
 title: "C++"
 permalink: /another-page
 ---
-Write some cool code!
+Write some cool JavaScript code!
 
 ```js
 var fn = function(a, b){return a +b;};
 
-const {a,b} = getResult();
+const {a,b} = getResult("some data");
 ```
 
 How about C++?
@@ -17,7 +17,7 @@ How about C++?
 #include <iostream>
 
 int main() {
-  std::cout << "hello, world\n";
+  std::cout << "hello, world" << std::endl;
   return 0;
 }
 ```
