@@ -14,6 +14,8 @@ interface Foo {
   days: number;
 }
 
+const name = "Bill";
+
 export default [1,2,3];
 ```
 

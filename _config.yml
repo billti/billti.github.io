@@ -21,8 +21,8 @@ github_username: billti
 # If you want to link only specific pages in your header, uncomment
 # this and add the path to the pages in order as they should show up
 header_pages:
-  - test.md
-  - another-page.md
+#  - test.md
+#  - v8/overview.md
   - about.md
 
 plugins:
