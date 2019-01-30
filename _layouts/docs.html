@@ -1,12 +1,22 @@
----
-layout: default
----
+<!DOCTYPE html>
+<html lang="{{ page.lang | default: site.lang | default: "en" }}">
+  {%- include head.html -%}
+  <body>
 
-<article style="display: flex; flex-wrap: nowrap; align-items: flex-start;">
-  <div>
-    {% include docs-nav.html %}
-  </div>
-  <div class="post-content" style="padding-left: 24px">
-    {{ content }}
-  </div>
-</article>
+    {%- include header.html -%}
+
+    <main class="page-content" aria-label="Content">
+      <article class="docs-content">
+
+        {% include docs-nav.html %}
+
+        <div class="post-content">
+          {{ content }}
+        </div>
+      </article>
+    </main>
+
+    {%- include footer.html -%}
+
+  </body>
+</html>

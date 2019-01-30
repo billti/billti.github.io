@@ -1,0 +1,24 @@
+.docs-content {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: flex-start;
+    max-width: 940px;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 30px;
+    padding-right: 30px;
+}
+
+.nav-container {
+    width: 150px;
+    padding-right: 24px;
+}
+
+.nav-chapter {
+    font-size: 14pt;
+}
+
+.nav-topic {
+    font-size: 12pt;
+    padding-left: 8px;
+}

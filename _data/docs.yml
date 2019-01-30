@@ -1,9 +1,9 @@
 toc:
   - chapter: Introduction
     topics:
-      - title: Overview
+      - title: V8 overview
         url: /v8
-      - title: Setup
+      - title: Dev setup
         url: /v8/setup
   - chapter: Build
     topics:

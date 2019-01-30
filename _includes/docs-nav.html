@@ -1,9 +1,9 @@
 {% assign toc = site.data.docs.toc %}
-<div>
+<div class="nav-container">
     {% for chapter in toc %}
-    <div style="font-size: 16px">{{chapter.chapter}}</div>
+    <div class="nav-chapter">{{chapter.chapter}}</div>
       {% for topic in chapter.topics %}
-      <div style="font-size: 14px; padding-left: 8px"><a href="{{topic.url}}">{{topic.title}}</a></div>
+      <div class="nav-topic"><a href="{{topic.url}}">{{topic.title}}</a></div>
       {% endfor %}
     {% endfor %}
 </div>
