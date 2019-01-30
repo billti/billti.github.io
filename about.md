@@ -5,12 +5,12 @@ permalink: /about/
 ---
 
 <div style="position: relative">
-  <div class="img-circular"></div>
+  <div class="img-circular img-placement"></div>
 </div>
 
-My name is Bill Ticehurst, and I'm a software developer living in Seattle.
+My name is Bill Ticehurst, and I'm a software developer living in beautiful Seattle, Washington.
 
-My main areas of interest are [JavaScript](https://tc39.github.io/ecma262/) &
+My main areas of interest in software development are [JavaScript](https://tc39.github.io/ecma262/) &
 [TypeScript](http://www.typescriptlang.org), [C++](https://isocpp.org/),
 [V8](https://v8.dev), and [Node.js](https://nodejs.org/en/).
 

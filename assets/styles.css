@@ -31,7 +31,15 @@
     display: block;
     border-radius: 120px;
     border: 2px solid slategray;
-    position: absolute;
-    left: -275px;
-    top: -75px;
+    margin-bottom: 20px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+@media screen and (min-width: 1400px) {
+    .img-placement {
+        position: absolute;
+        left: -275px;
+        top: -75px;
+    }
 }
