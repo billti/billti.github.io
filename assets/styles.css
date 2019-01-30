@@ -22,3 +22,16 @@
     font-size: 12pt;
     padding-left: 8px;
 }
+
+.img-circular {
+    width: 240px;
+    height: 240px;
+    background-image: url("/assets/images/Bill.jpg");
+    background-size: cover;
+    display: block;
+    border-radius: 120px;
+    border: 2px solid slategray;
+    position: absolute;
+    left: -275px;
+    top: -75px;
+}
