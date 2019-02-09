@@ -1,6 +1,6 @@
 ---
 layout: post
-title: Minimal Node.js native modules
+title: Minimal Node.js native modules - the CRT
 ---
 
 I recently wanted to author a Node.js native module for inclusion into an application that only runs
@@ -164,22 +164,10 @@ With that, compiling on machine now results in a binary of:
   2,560 myapp.exe
 ```
 
-A fully function x64 Windows binary at 2.5KB in size! You can run it and see `"Hello, world"` written
-to the console. At the developer command prompt you can run `dumpbin /dependents /imports myapp.exe`
+A fully functional x64 Windows application at 2.5KB in size! You can run it and see `"Hello, world"`
+written to the console. At the developer command prompt you can run `dumpbin /dependents /imports myapp.exe`
 again and see that it is dependent only only one other DLL at runtime (kernel32.dll) and imports just
 two functions from it. Nice!
 
-In the next post we'll discuss how to build a Node.js native module (for Windows) without using the
+In the next post we'll discuss how to build a tiny Node.js native module (for Windows) without using the
 C runtime library via the approach outlined above.
-
-<!--
-# TODO
-
-  - [ ] Reproducing the NAPI CRT initialization functionality in DllMain.
-  - [ ] Using the OS APIs for string manipulation.
-  - [ ] Providing simple substitutes for needed CRT functions (e.g. malloc/free, new/delete, strlen, etc.)
-  - [ ] Challenges with the loader hooks and delayimp.lib (needed for Electron).
-  - [ ] Dynamically loading the Node.js module and NAPI functions.
-  - [ ] The added benefit of feature detection!
-  - [ ] A header only dependency for Node.js!
--->
