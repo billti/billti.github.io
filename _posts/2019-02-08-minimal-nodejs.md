@@ -13,14 +13,15 @@ discuss how to build a Node.js native module with the build options laid out bel
 ## The C runtime library.
 
 Dealing with the C runtime library can be complicated on Windows. The standard cross-platform APIs you
-can write with is highly valuable, but on Windows you have two ways to use the CRT, and both have pros and cons.
+can write with are highly valuable, but on Windows you have two ways to use the CRT, and both have pros
+and cons - especially when it come to small binaries shipped via a package manager
 
 _Note: Many of the issues I hit regarding the CRT for Node.js binaries I subsequently found were also hit by Steve Dower
-with Python binaries for many of the same reasons. I highly recommend reading [his blog posts](https://stevedower.id.au/blog/building-for-python-3-5-part-two/) on the topic for greater detail on the underlying issues._
+with Python extensions for many of the same reasons. I highly recommend reading [his blog posts](https://stevedower.id.au/blog/building-for-python-3-5-part-two/) on the topic for greater detail on the underlying issues._
 
 ### Dynamically linking
 
-This is the recommended approach, with minimal issues **if** the CRT DLLs are already present on the machine.
+This is the recommended approach, with minimal issues _**if**_ the CRT DLLs are already present on the machine.
 If you are distributing a large package for install, then you can bundle the CRT redistributable into your
 installer to make sure. However, when you are trying to distribute a small package via npm - that should
 install with minimal install scripts, permissions, and package size - this isn't a good option.
@@ -44,9 +45,9 @@ runtime dependencies on separate CRT binaries, but still has issues to contend w
      the process, but if multiple binaries statically link the CRT, then each has its own copy of this state.
      ([This link](https://docs.microsoft.com/en-us/cpp/c-runtime-library/crt-library-features?view=vs-2017#what-problems-exist-if-an-application-uses-more-than-one-crt-version) contains some details).
   2. Loosely related to the above, each initialization of the CRT (which now happens in each statically linked
-     copy), consumes some finite resource - the most problematic of these being fiber-local storage. If you
+     copy), consumes some finite resource - the most problematic of these being thread/fiber-local storage. If you
      load enough binaries that statically link the CRT, you could potentially exhaust the limit, causing failures.
-     Steve's blog linked to above contains much greater detail on this.
+     Steve's Python blog linked to above contains much greater detail on this.
   3. Size. While in a _real_ app, even a few MB might be trivial, I was aiming for a minimal package size. My module
      is very lightweight, and with dynamical linking to the CRT the binary was less than 20KB. But with static linking,
      even with minimal CRT usage, this ballooned to close to 100KB. (Which may still not be much compared to many
@@ -54,7 +55,7 @@ runtime dependencies on separate CRT binaries, but still has issues to contend w
 
 _Note that building native Node.js modules using `node-gyp` today uses this static linking approach._
 
-### No linking
+### No CRT linking
 
 There is another option: Don't use the C/C++ runtime libraries. For the limited functionality my module required,
 and as I was only targeting Windows, this was a perfectly valid option. However it did come with some
@@ -166,8 +167,8 @@ With that, compiling on machine now results in a binary of:
 
 A fully functional x64 Windows application at 2.5KB in size! You can run it and see `"Hello, world"`
 written to the console. At the developer command prompt you can run `dumpbin /dependents /imports myapp.exe`
-again and see that it is dependent only only one other DLL at runtime (kernel32.dll) and imports just
+again and see that it is dependent on only one other DLL at runtime (kernel32.dll) and imports just
 two functions from it. Nice!
 
-In the next post we'll discuss how to build a tiny Node.js native module (for Windows) without using the
-C runtime library via the approach outlined above.
+In the next post we'll discuss how to build a tiny Node.js native module (again, for Windows only)
+using only the OS (and Node.js) APIs via the approach outlined above.

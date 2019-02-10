@@ -24,7 +24,13 @@ To make this easily repeatable, create a file named `build.bat` as shown below. 
 have been added over the prior post, mostly for generating debug info and specifying directory paths.
 
 ```bat
+@ECHO OFF
 SETLOCAL
+if not "%VSCMD_ARG_TGT_ARCH%"=="x64" (
+    echo Please build from an x64 Native Tools command prompt for VS 2017
+    exit /b 1
+)
+
 :: Compiler options are:
 :: - /O2  optimize for speed
 :: - /GS- switch off extra runtime security checks (these need the CRT)
@@ -36,22 +42,16 @@ SETLOCAL
 SET CL=/O2 /GS- /LD /Zi /I"include\node" /D"UNICODE" /Fdx64\ /Fox64\ /Fe"x64\vsnapi.node"
 
 :: Linker options are:
-:: - /OPT           enable given optimizations (the /Zi setting defaults them to off)
+:: - /OPT           enable given optimizations (using the /Zi setting defaults them to off)
 :: - /NODEFAULTLIB  do not link to the C runtime by default
 :: - /ENTRY         use the given entry point (not the default CRT one)
 SET LINK=/OPT:REF,ICF /NODEFAULTLIB /ENTRY:DllMain
 
-:: Add the node.lib directory to the library search paths
-SET LIB=%LIB%;lib\node\x64
-
-SET SOURCES=main.cc
-SET LIBS=kernel32.lib node.lib
-
-:: This will use the CL and LINK environement variables for options
-cl %SOURCES% %LIBS%
+:: This will use the CL and LINK environment variables for options
+cl main.cc kernel32.lib lib\node\x64\node.lib
 ```
 
-Now from an `x64 Developer Command Prompt` in the directory, run `build` - and the build will fail.
+Now from an `x64 Native Tools Command Prompt` in the directory, run `build` - and the build will fail.
 
 This is because the sample code doesn't provide a DllMain entry point and depends on the C runtime.
 You can temporarily remove the `/NODEFAULTLIB` and `/ENTRY` options and the code will compile by linking
