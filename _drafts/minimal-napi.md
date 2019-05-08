@@ -97,7 +97,8 @@ structure, by putting a pointer to a function to run (`_register_vsnapi`) direct
 (`.CRT$XCU`) the CRT reads when it runs at startup. (i.e. the entry point we no longer have).
 
 _Note: I highly recommend the Matt Godbolt talk [The bits between the bits][] for an under the covers
-look at how this initialization works at startup when using the C runtime_
+look at how this initialization works at startup when using the C runtime. The documentation on
+[CRT Initialization][] also gives a good overview._
 
 To do the same initialization at load time without the CRT, we'll provide the DllMain entry function
 and run similar code directly when the module is loaded. After also adding the `windows.h` include to
@@ -162,7 +163,6 @@ run. The resulting binary is not using the CRT, and on my machine the binary siz
 ```text
   3,072 vsnapi.node
 ```
-
 
 # Delay loading
 
@@ -296,3 +296,4 @@ Thanks for reading!
 
 [The bits between the bits]: https://www.youtube.com/watch?v=dOfucXtyEsU
 [NAPI API]: https://nodejs.org/dist/latest-v10.x/docs/api/n-api.html
+[CRT Initialization]: https://docs.microsoft.com/en-us/cpp/c-runtime-library/crt-initialization?view=vs-2017

@@ -21,6 +21,8 @@ toc:
     topics:
       - title: Isolate
         url: /v8/isolate
+      - title: Context
+        url: /v8/context
       - title: Platform
         url: /v8/platform
       - title: Scope
@@ -39,5 +41,5 @@ toc:
         url: /v8/parser
       - title: Debugger
         url: /v8/debugger
-      - title: Logging
-        url: /v8/logging
+      - title: Tracing
+        url: /v8/tracing
