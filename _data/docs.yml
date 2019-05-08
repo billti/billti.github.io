@@ -5,6 +5,8 @@ toc:
         url: /v8
       - title: Dev setup
         url: /v8/setup
+      - title: Glossary
+        url: /v8/glossary
   - chapter: Build
     topics:
       - title: Clang

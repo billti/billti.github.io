@@ -13,9 +13,8 @@ some context before delving deeper.
 
 V8 does not provide a host environment (other than the D8 utility used for testing).
 V8 requires certain services that a host may wish to provide, such as a thread-pool,
-a task-runner or event-loop, a memory allocator, logging infrastructure, etc. These 
-are provided by implementing a `Platform`, or which V8 provides a `DefaultPlatform`
-for basic usage.
+a task-runner, a memory allocator, logging infrastructure, etc. These are provided by
+implementing a `Platform`, or which V8 provides a `DefaultPlatform` for basic usage.
 
 ### Isolate
 
@@ -31,6 +30,21 @@ A `Context` provides the environment that any running JavaScript sees, such as t
 JavaScript objects. A context is useful for things like iframes, where each iframe has
 its own global objects. As only one thread can be running in an isolate, a context
 does not provide any concurrency (if multiple contexts are in the same isolate).
+
+### Handles and Scopes
+
+References to V8 allocated objects are maintained with "Handles" in native code (often
+represented via the "Local" or "MaybeLocal" class). A handle is a form of indirection
+that allows for the garbage collector to efficiently track resource usage.
+
+Handles are allocated within the context of a "HandleScope". These are stack allocated
+objects, and when they go out of scope and are destroyed, the handles within them are
+also assumed to be no longer referenced (i.e. the garbage collector can reclaim them).
+
+There are also "Persistent" and "Global" handles for the case where an object needs to
+be referenced in native code beyond the lifetime of a "HandleScope".
+
+TODO: Confirm and clarify the information here.
 
 ### Parser
 
@@ -67,16 +81,23 @@ moved as the garbage collector runs.
 ### Debugger
 
 V8 includes a debugger, that external tools may talk to via a debug protocol know
-as the [inspector protocol](https://v8.dev/docs/inspector).
+as the [inspector protocol](https://v8.dev/docs/inspector). The debugger supports
+standard operations such as break, step, evaluate expressions (including variables),
+set breakpoints, etc. The inspector protocol "domains" of [Debugger](https://chromedevtools.github.io/devtools-protocol/tot/Debugger)
+and [Runtime](https://chromedevtools.github.io/devtools-protocol/tot/Runtime) provide
+most of the functionality in this area.
 
 ### Profiler
 
 A CPU profiler is included in V8, which may also be communicated with via the
-[inspector protocol](https://chromedevtools.github.io/devtools-protocol/tot/Profiler).
+inspector protocol's [Profiler](https://chromedevtools.github.io/devtools-protocol/tot/Profiler)
+domain. This works by interrupting the main JavaScript thread 1000 times per second and walking
+the stack. (TODO: Doesn't this work differently on different OSes?).
 
-### Tracing
-
-TODO [Tracing](https://v8.dev/docs/trace)
+A heap profiler is also included in V8, again accessible via the
+inspector protocol's [HeapProfiler](https://chromedevtools.github.io/devtools-protocol/tot/HeapProfiler)
+domain. This can be used to collect heap snapshots to view the allocated objects, what is
+retaining them, and see a difference between two snapshots. (Among other features).
 
 ### Snapshot
 
@@ -87,7 +108,11 @@ the functions to not need to be compiled again.
 
 ### ICU
 
-TODO https://v8.dev/docs/i18n
+V8 [internationalization](https://v8.dev/docs/i18n) is provided by the
+[International Components for Unicode](http://userguide.icu-project.org/intro), often
+appreviated to simply "ICU". This consists of a database of information for timezones,
+countries, locales, etc. (for example in "v8\third_party\icu\common\icudtl.dat"), as
+well as the source code to work with it (e.g. under "v8\third_party\icu\source").
 
 ### Torque
 
@@ -102,6 +127,12 @@ TODO [CSA](https://v8.dev/docs/csa-builtins)
 
 ### Wasm
 
+TODO
+
 ### D8
 
 TODO [D8](https://v8.dev/docs/d8)
+
+### Tracing
+
+TODO [Tracing](https://v8.dev/docs/trace)
