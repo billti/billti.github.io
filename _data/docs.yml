@@ -5,6 +5,8 @@ toc:
         url: /v8
       - title: Dev setup
         url: /v8/setup
+      - title: Glossary
+        url: /v8/glossary
   - chapter: Build
     topics:
       - title: Clang
@@ -19,6 +21,8 @@ toc:
         url: /v8/hello-world
   - chapter: Concepts
     topics:
+      - title: Overview
+        url: /v8/concepts
       - title: Isolate
         url: /v8/isolate
       - title: Context
@@ -29,6 +33,8 @@ toc:
         url: /v8/scope
       - title: Handle
         url: /v8/handle
+      - title: Objects
+        url: /v8/objects
   - chapter: Components
     topics:
       - title: GC
