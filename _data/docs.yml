@@ -9,6 +9,8 @@ toc:
         url: /v8/glossary
   - chapter: Build
     topics:
+      - title: Depot Tools
+        url: /v8/depot-tools
       - title: Clang
         url: /v8/clang
       - title: Ninja
