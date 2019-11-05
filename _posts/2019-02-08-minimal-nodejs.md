@@ -10,7 +10,7 @@ This is my journey.
 _Note: This first post will deal only with consideration in using the C runtime library. A follow-up post will
 discuss how to build a Node.js native module with the build options laid out below._
 
-## The C runtime library.
+## The C runtime library
 
 Dealing with the C runtime library can be complicated on Windows. The standard cross-platform APIs you
 can write with are highly valuable, but on Windows you have two ways to use the CRT, and both have pros
@@ -172,3 +172,5 @@ two functions from it. Nice!
 
 In the next post we'll discuss how to build a tiny Node.js native module (again, for Windows only)
 using only the OS (and Node.js) APIs via the approach outlined above.
+
+_Continue on to [part 2](/2019/07/10/minimal-nodejs-part-2.html)_
