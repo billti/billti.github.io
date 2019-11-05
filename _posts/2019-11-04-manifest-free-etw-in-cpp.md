@@ -7,8 +7,8 @@ ETW is a great technology when all the stars line up, but various iterations ove
 have had various limitations, and it often isn't the easiest technology to work with.
 
 One of the main challenges previously was the need to ship a manifest with your
-instrumented code, and installing the manifest when install the app would require
-custom actions and admin privileges.
+instrumented code, and installing the manifest when installing the app would often
+require custom actions and admin privileges for the installer.
 
 With the new [TraceLogging framework](https://docs.microsoft.com/en-us/windows/win32/tracelogging/trace-logging-portal),
 "manifest-free" ETW became a thing, and instrumenting and distributing an app become simpler.
@@ -262,7 +262,7 @@ For example, as the provider will usually NOT be enabled, the check could be wri
 
 Once various functions are inlined and optimized, this resulted in the below CPU instructions
 at the location in the user code where the ETW logging call was made. Basically, only
-3 instructions, and no branch, are executed when logging is not enabled. This can
+3 additional instructions, and no branch, are executed when logging is not enabled. This can
 also reduce the number of instructions fetched into the instruction cache during
 execution, if the code after the main body of the function is never executed.
 
@@ -315,20 +315,20 @@ the event metadata, and uses a parameter pack to handle the event data, e.g.
 In general, the provider methods to log events should be as simple as possible,
 (for example, like the `Log3Fields` method shown above), and be inline methods
 implemented in the header file, which will allow the compiler to inline the tracing
-calls as shown in the assembly above. (Link time optimization may also be able to
-do this, but I didn't try it).
+calls into the instrumented code as shown in the assembly above. (Link time optimization
+may also be able to do this, but I didn't try it).
 
 ## Performance
 
-The ETW docs state that on an average machine a provider should be able to log about
-10,000 events/sec without too much overhead. In my simple testing writing a trivial
+I've read ETW notes that state that on an average machine a provider should be able to log about
+10,000 events/sec without too much overhead. In my simple testing, writing a trivial
 app to allocate, fill, and sort random arrays (i.e. mostly memory and CPU bound),
 I noticed on average about a 3% overhead (increase in execution time) with the
 provider enabled and recording around 10,000 events/sec over a large number of runs.
-This is on my Surface Book 2, which is a good laptop, but is still just a laptop.
+This is on my Surface Book 2, which is a decent laptop, but is still just a laptop.
 
 The below charts shows the execution time (in microseconds) over 40 runs with the
-provider enabled and disabled. The overhead is usually less than the noise.
+provider enabled and disabled. The overhead is often less than the noise.
 
 <img src="/assets/images/etw-chart.png"/>
 
