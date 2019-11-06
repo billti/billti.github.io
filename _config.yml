@@ -28,3 +28,5 @@ header_pages:
 plugins:
   - jekyll-seo-tag
   - jekyll-feed
+
+google_analytics: UA-151736593-1
