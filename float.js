@@ -1,3 +1,30 @@
+/*
+Floating point notes:
+
+s = sign, c = significand (coefficient) of p (precision) digits in base 2, q = exponent (from emin to emax).
+
+Exponent is "biased". For example, the 8 bits of a float exponent can represent
+0 to 255, but a bias of 127 is subtracted, making the range from -127 to 128.
+Also note that an unbiased exponent of 0, (e.g. -127) is used for subnormal numbers,
+and of 255 (e.g 128) is used for Infinity & NaNs, making the exponent range: emin = -126, emax = +127.
+
+32-bit float: 1 sign bit, 8 exponent bits, 23 significand bits. Bias = 127.
+64-bit float: 1 sign bit, 11 exponent bits, 52 significant bits. Bias = 1023.
+
+A leading 1. is implied for normals, giving 24/53 bits in the significand respectively.
+
+Smallest subnormal = 2^(emin - significand bits), e.g. 2^-149 for floats, 2^-1074 for doubles.
+Biggest normal = 1.111...^emax = ~1.7977e+308 for double, and ~3.403e+38 for floats.
+
+To convert a float to a double:
+ - Set double bits 0..28 to 0, and bits 29 to 51 to the float significant (bits 0 to 22).
+ - Set the double exponent to the float exponent + 896 (i.e. add 1023 - 127).
+
+An exponent of all 1s means either infinity (significand == 0), or NaN (significand != 0).
+NaNs can be "quiet" or "signalling", with quiet having the high order bit of the significant set.
+*/
+
+
 function Float(elem){
     var that = this;
     if(elem) {
