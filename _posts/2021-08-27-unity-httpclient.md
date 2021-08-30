@@ -11,7 +11,7 @@ frustration, which I will document here.
 
 First, some background: Why does `HttpClientFactory` exist? There's a long and sordid history to this.
 
-An (in)famous post title _"You're using HttpClient wrong and it is destabilizing your software"_ at
+An (in)famous post titled _"You're using HttpClient wrong and it is destabilizing your software"_ at
 <https://www.aspnetmonsters.com/2016/08/2016-08-27-httpclientwrong/> outlines the first problem. Namely,
 although `HttpClient` implements the `IDispose` interface, you shouldn't be spinning them up and disposing
 them regularly. By default this will create new network connections for each `HttpClient` instance, and
@@ -25,19 +25,21 @@ use it, thus reusing the network connections is allocates. This however, results
 problem as outlined in _"Singleton HttpClient? Beware of this serious behavior and how to fix it"_ at
 <http://byterot.blogspot.com/2016/07/singleton-httpclient-dns.html>. Basically the problem with using
 a single HttpClient and continually reusing the connections, is that DNS changes will now never get
-picked up. Various performance and reliability solutions on the internet (such as 
+picked up. Various performance and reliability solutions on the internet (such as
 [Azure Front Door](https://docs.microsoft.com/en-us/azure/traffic-manager/traffic-manager-overview))
 use DNS changes to route clients to different endpoints depending on load and health. Some deployment
 features such as A/B testing or switching staging slots can also be implemented via DNS changes.
 
 The solution to this is to use `HttpClientFactory` to get a new `HttpClient` on demand. Under the
-covers it handles persisting connections for a couple mins (even when the `HttpClient` is disposed)
+covers it handles persisting connections for a couple of minutes (even when the `HttpClient` is disposed)
 and also spinning up new connections regularly to pick up any DNS changes. You can read more about
 how to use it on the doc page [Use IHttpClientFactory to implement resilient HTTP requests](https://docs.microsoft.com/en-us/dotnet/architecture/microservices/implement-resilient-applications/use-httpclientfactory-to-implement-resilient-http-requests).
 
 So just use that right?
 
 ## Unity and .NET
+
+_(Note: My specific Unity project is using the .NET 4.x profile, so those are the APIs this post will cover)_
 
 Unity doesn't use the "official" .NET 4.x Framework. It also doesn't use .NET Core. It's version of
 .NET is from the [Mono project](https://www.mono-project.com/). (Actually a fork of this project, but
@@ -75,9 +77,9 @@ you'll notice the below:
 
 Notice the _"..not working reliably across platforms.."_ bit. Sadly, Mono is one of those platforms. Using
 ILSpy on the Mono version of `System.Net.Http.dll` versus the other .NET implementations, it can been seen
-there are many things that are simply not implemented. Sadly, `ConnectionLeaseTimeout` is one of them.
+there are many things that are simply not implemented. Sadly, `ServicePoint.ConnectionLeaseTimeout` is one of them.
 
-<img src="/assets/images/mono-ilspy.png"/>
+<img src="/assets/images/mono-ilspy.png" width="262px"/>
 
 This left but one option: Figure out how all this fits together and write a custom solution.
 
@@ -120,13 +122,22 @@ unmanaged resources.
 The connections themselves are managed by a `ServicePointScheduler`, which tracks when an operation
 completes on a connection and will then close it when idle. See [this code in the Mono repository](https://github.com/mono/mono/blob/mono-6.12.0.151/mcs/class/System/System.Net/ServicePointScheduler.cs#L223)
 
+Effectively `HttpClient` and `HttpClientHandler` are just factories to create `HttpResponseMessage`
+objects (and corresponding `HttpRequestMessage`) against a specific `ConnectionGroup`. They do not
+hold any references to these objects, and refer to the `ConnectionGroup` by name only, as seen below.
+
+<img src="/assets/images/mono-httpclienthandler.png" width="652px"/>
+
+As long as you don't explicitly `Dispose` the underlying `HttpClientHandler`, but instead provide your
+own and simply stop using it and leave to the GC to clean up when done, all is good.
+
 This allows for both the `HttpClient` to be disposed (which doesn't dispose the provided `HttpClientHandler`),
 and for the `HttpClientHandler` to be garbage collected when no longer referenced, without killing any
 in use connections. The `ServicePoint` manages the active connections, and will clean them up when no longer used.
 
-This allows for code such as the below, which returns only a stream, and the connection will remain
+Implmenting a `UnityHttpClient` with this approach allows for code such as the below, which returns only a stream, and the connection will remain
 active until the response is completed, even after the `HttpClient` and the underlying `HttpClientHandler`
-have long gone.
+have long gone. The class will start using a new `HttpClientHandler` periodically to allocate new connections.
 
 ```csharp
     async Task<Stream> GetHttpStream()
@@ -139,17 +150,17 @@ have long gone.
 
 Using the excellent [Memory Profilers Package](https://docs.unity3d.com/Packages/com.unity.memoryprofiler@0.2/manual/index.html)
 in Unity, from the stream returned above, we can see it reference down to the underlying network socket.
-Also shown in the `ServicePoint` which holds a reference to outstanding operations and current network
+Also shown is the `ServicePoint` which holds a reference to outstanding operations and current network
 connections, (as well as idle connections to be cleaned up after the idle timeout). References
 of interest have been underlined.
 
-<img src="/assets/images/unity-memory.png" width="1000px"/>
+<img src="/assets/images/unity-memory.png"/>
 
 
 ## Writing the Unity HttpClient factory
 
-With the above in mind, how should an `HttpClientFactory` for Unity look. Below is the
-implementation I came up with. Note this allows for a "named" clients to explicitly get
+With the above in mind, how should the `UnityClientFactory` look? Below is the
+implementation I came up with. Note this allows for "named" clients to explicitly get
 a new set of connections (as outlined in the comments).
 
 ```csharp
@@ -158,18 +169,21 @@ public class UnityHttpClient
     private const int handlerExpirySeconds = 120;
     private static readonly object factoryLock = new object();
 
-    private static readonly Dictionary<string, UnityHttpClient> factories = new Dictionary<string, UnityHttpClient>()
-    {
-        { string.Empty, new UnityHttpClient() }
-    };
+    private static readonly Dictionary<string, UnityHttpClient> factories =
+            new Dictionary<string, UnityHttpClient>()
+            {
+                { string.Empty, new UnityHttpClient() }
+            };
 
     public static HttpClient Get() => factories[string.Empty].GetNewHttpClient();
 
-    // Each unique HttpClientHandler gets a new Connection limit per origin, so create a new "named" client
-    // factory to get a new handler (used by each HttpClient from that factory), and thus new set of connections.
+    // Each unique HttpClientHandler gets a new Connection limit per origin, so create
+    // a new "named" client factory to get a new handler (used by each HttpClient from
+    // that factory), and thus new set of connections.
     //
-    // For example, if you have a few long-running requests, you might choose to put them on their own
-    // handler/connections so you don't block other faster requests to the same host.
+    // For example, if you have a few long-running requests, you might choose to put
+    // them on their own handler/connections so you don't block other faster requests
+    // to the same host.
     public static HttpClient Get(string name)
     {
         UnityHttpClient factory;
@@ -190,7 +204,8 @@ public class UnityHttpClient
 
     private UnityHttpClient() { }
 
-    private HttpClient GetNewHttpClient() => new HttpClient(GetHandler(), disposeHandler: false);
+    private HttpClient GetNewHttpClient() =>
+            new HttpClient(GetHandler(), disposeHandler: false);
 
     private HttpClientHandler GetHandler()
     {
@@ -198,7 +213,7 @@ public class UnityHttpClient
         {
             if (_handlerTimer.Elapsed.TotalSeconds > handlerExpirySeconds)
             {
-                // Leave the old HttpClientHandler to the GC to clean up. DON'T Dispose() it!
+                // Leave the old HttpClientHandler for the GC. DON'T Dispose() it!
                 _currentHandler = new HttpClientHandler();
                 _handlerTimer.Restart();
             }
@@ -208,9 +223,223 @@ public class UnityHttpClient
 }
 ```
 
+## Testing
+
+To verify the code behaves as desired, I created a simple web service that has two REST APIs. The
+first `/api/item` generates small and fast responses, and the second `/api/blob` for large and slow
+responses. This simple web server can be written in a few lines of C# code using top-level statements
+(as introduced in C# 9). The entire ASP.NET Core 5 project code is shown below:
+
+```csharp
+using System;
+using System.Diagnostics;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Hosting;
+
+int requestId = 0;
+
+var builder = Host.CreateDefaultBuilder().ConfigureWebHostDefaults(webBuilder =>
+{
+    webBuilder.Configure(app =>
+    {
+        // Fast and small JSON response
+        app.Map("/api/item", app =>
+        {
+            app.Run(async context =>
+            {
+                int itemId = Interlocked.Increment(ref requestId);
+                byte[] body = Encoding.UTF8.GetBytes($"{{\"itemId\" : {itemId}}}");
+
+                context.Response.StatusCode = 200;
+                context.Response.ContentLength = body.Length;
+                context.Response.ContentType = "application/json";
+
+                await context.Response.BodyWriter.WriteAsync(body.AsMemory());
+                await context.Response.CompleteAsync();
+            });
+        });
+
+        // Large and slow binary response
+        app.Map("/api/blob", app =>
+        {
+            app.Run(async context =>
+            {
+                Stopwatch chunkTimer = Stopwatch.StartNew();
+                const int contentLength = 1024 * 1024 * 10; // 10 MB
+                const int chunkSize = 1024 * 16;            // in 16kb chunks
+                const int responseTimeMs = 10000;           // Response to take 10 sec
+
+                Debug.Assert(chunkSize % 128 == 0 && contentLength % chunkSize == 0,
+                  "chunkSize must be multiple of 128 and divide into contentLength");
+
+                context.Response.StatusCode = 200;
+                context.Response.ContentLength = contentLength;
+                context.Response.ContentType = "application/octet-stream";
+
+                int bytesWritten = 0;
+                while (bytesWritten < contentLength)
+                {
+                    StringBuilder content = new(chunkSize);
+                    while (content.Length < chunkSize)
+                    {
+                        string txt = $"{bytesWritten + 128} bytes including this line"
+                            .PadRight(127, '-') + "\n";
+                        content.Append(txt);
+                        bytesWritten += 128;
+                    }
+                    byte[] chunk = Encoding.UTF8.GetBytes(content.ToString());
+                    Debug.Assert(chunk.Length == chunkSize);
+
+                    await context.Response.BodyWriter.WriteAsync(chunk.AsMemory());
+
+                    // Delay each chunk so the request takes the desired time
+                    double percentComplete = (double)bytesWritten / contentLength;
+                    long durationSoFarMs = chunkTimer.ElapsedMilliseconds;
+                    int delayMs =
+                            (int)(percentComplete * responseTimeMs - durationSoFarMs);
+                    if (delayMs > 0) await Task.Delay(delayMs);
+                }
+
+                await context.Response.CompleteAsync();
+            });
+        });
+    });
+});
+
+builder.Build().Run();
+```
+
+## Using dedicated connections
+
+Below shows the code to test the service. Of particular interest are lines 6 & 7, where the requests
+to the large and slow endpoint can either use the default handler, or be configured with their own
+handler. For the initial tests we'll put everything on the same handler.
+
+This code sends a new request every second. Note the condition `if (reqId % 3 == 0) {...}` that
+causes every third request to be to the slow API.
+
+```csharp
+public class MyDownloader : MonoBehaviour
+{
+    async Task<Stream> GetHttpStream()
+    {
+        // *** Switch which line is commented out below to use a dedicated handler ***
+        // using var client = UnityHttpClient.Get("slow");
+        using var client = UnityHttpClient.Get();
+
+        var stream = await client.GetStreamAsync("https://localhost:5001/api/blob");
+        return stream;
+    }
+
+    async Task<HttpResponseMessage> GetHttpRequest()
+    {
+        using var client = UnityHttpClient.Get();
+        var req = await client.GetAsync("https://localhost:5001/api/item");
+        if (req.StatusCode != System.Net.HttpStatusCode.OK)
+        {
+            throw new ApplicationException("Error");
+        }
+        return req;
+    }
+
+    bool doRequests = false;
+    int requestId = 0;
+    Stopwatch timer;
+
+    void Start()
+    {
+        LogMsg($"Starting downloader.");
+        timer = Stopwatch.StartNew();
+    }
+
+    void LogMsg(string msg) =>
+        Debug.Log(msg + $" ThreadId: {Thread.CurrentThread.ManagedThreadId}");
+
+    void Update()
+    {
+        if (!doRequests) return;
+
+        // Every second start a new request
+        if (timer.ElapsedMilliseconds >= 1000)
+        {
+            timer.Restart();
+            int reqId = Interlocked.Increment(ref requestId);
+            Task.Run(async () =>
+            {
+                if (reqId % 3 == 0)
+                {
+                    // One in three requests is for a large/slow item.
+                    Debug.Log($"Request {reqId} starting for slow blob. " +
+                            $"ThreadId: {Thread.CurrentThread.ManagedThreadId}");
+
+                    var stream = await GetHttpStream();
+
+                    // On a separate thread, read the stream to completion.
+                    _ = stream.CopyToAsync(Stream.Null).ContinueWith(_ =>
+                          LogMsg($"Request {reqId} completed for slow blob."));
+                }
+                else
+                {
+                    LogMsg($"Request {reqId} starting for fast json.");
+                    var request = await GetHttpRequest();
+                    LogMsg($"Request {reqId} completed for fast json.");
+                }
+            });
+        }
+    }
+
+    void OnMouseDown()
+    {
+        doRequests = !doRequests;
+    }
+}
+```
+
+Running this code as-is we can see that pretty soon even the "_quick_" requests are getting backed up
+waiting for the slow requests to complete. The initial "fast" requests number 1, 2, 4, and 5 all
+complete within the expect 1 sec time. But once the second "slow" request starts (request 6), we see
+that all requests start taking a while to complete, as the two connections per origin limit is
+consumed with running the slow requests.
+
+#### Log with one handler
+<img src="/assets/images/unity-requests-one-handler-log.png" width="401px"/>
+
+If we look at the object in memory, we can see in the scheduler that the default two connections are
+allocated, and there are a queue of operations waiting to run.
+
+#### Objects with one handler
+<img src="/assets/images/unity-requests-one-handler-memory.png"/>
+
+### Adding an additional handler
+
+If we uncomment line 6 and comment out line 7, so that `GetHttpStream` is using its own dedicated
+handler group (named "slow"), we see that now all the fast API requests are completing immediately,
+even as the slow API requests start to queue up.
+
+#### Log with slow handler
+<img src="/assets/images/unity-requests-slow-handler-log.png" width="390px"/>
+
+The objects in memory show us that there are now two `ConnectionGroup` objects contained within the
+`ServicePointScheduler`, and that the group named `HttpClientHandler1` (the first group created for
+the fast requests) has an emtpy queue - even with slow requests waiting. Meanwhile the group created
+for the slow requests, `HttpClientHandler2`, has a couple items in the queue (as well as operations
+currently in progress).
+
+#### Objects with slow handler
+<img src="/assets/images/unity-requests-slow-handler-memory.png"/>
+
+This shows that being able to provide a "named" connection group can avoid contention and blocking
+for requests on other groups.
+
 ## TODO
 
+- How does this interact with the Unity API for downloading assets.
+  - See <https://docs.unity3d.com/2020.1/Documentation/Manual/UnityWebRequest-DownloadingAssetBundle.html>
 - Show the network sockets over time being kept to a minimum with many requests.
 - Show DNS changes getting picked up.
-- Show putting slow connections on one named group/handlers, fast on another,
-  which means the slow requests will never block the fast (unlike with all on default connections).
+- Discuss connection limits to a specific service, and ServicePoint settings.
