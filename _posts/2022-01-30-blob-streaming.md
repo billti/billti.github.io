@@ -4,13 +4,13 @@ title: Streaming large blobs through ASP.NET
 ---
 
 Recently I spent way too much time with a colleague digging into an issue that occurred on one of our
-services that serves largely static content through an ASP.NET Core service to check authentication
-and do some other logic. It had been working fine for months with the assets we had, but suddenly
-starting failing with some larger downloads.
+services that serves largely static content through an ASP.NET Core service. The service is required
+and an intermediary in order to check authentication and do some other logic. It had been working fine
+for months with the assets we had, but suddenly starting failing with some larger downloads.
 
 On further inspection, it was noticed that it was failing on assets over 8MB, which up to recently
-all our assets had been smaller than. When we pointed directly at the origin server (as ASP.NET Core
-service) instead of through the CDN, the downloads also worked fine.
+all our assets had been smaller than. When we pointed directly at the ASP.NET origin server instead
+of through the CDN, the downloads also worked fine.
 
 The CDN in use is Azure Front Door. After some digging around in the docs, we found the below comments
 on the page at <https://docs.microsoft.com/en-us/azure/cdn/cdn-large-file-optimization> for the Azure
@@ -73,7 +73,7 @@ app.Run();
 ```
 
 I then dropped a file at `./wwwroot/large.txt` which is just a million lines of text, each 32 bytes
-long, stating which line number they are (starting at line 1).
+long, with text stating the current line number.
 
 Using Postman to make a Range request starting on line 1001 (i.e., starting 32000 bytes in) for the
 next 1024 bytes (which equals 32 lines), we see a request/response as shown below.
@@ -134,17 +134,17 @@ Last-Modified: Sat, 29 Jan 2022 05:57:34 GMT
 1000000 is the current line   
 ```
 
-This is perfectly valid per the spec, which states:
+Getting a `200 OK` rather than a `206 Partial Content` is perfectly valid per the spec, which states:
 
 _Range requests are an OPTIONAL feature of HTTP, designed so that recipients not implementing this
 feature (or not supporting it for the target resource) can respond as if it is a normal GET request
 without impacting interoperability._
 
+## Sending the file contents
+
 Digging through the [ASP.NET Core 6 code](https://github.com/dotnet/aspnetcore/tree/release/6.0),
 we can see static files are served by the `StaticFileMiddleware` class in `src\Middleware\StaticFiles\src\StaticFileMiddleware.cs`.
 The meat of the work happens in method `StaticFileContext::ServeStaticFile` at `src\Middleware\StaticFiles\src\StaticFileContext.cs`.
-
-## Sending the file contents
 
 To send the actual file we end up `StaticFileContext::SendRangeAsync`. Here it has some more interesting
 notes regarding behavior if the range is not satisfiable. Namely, the `Content-Range` header in the error response
@@ -176,8 +176,8 @@ try
 }
 ```
 
-Which then ends up in `SendFileAsync` in `src\Http\Http\src\SendFileFallback.cs`
-which does basic File stream operation to the Kestrel response stream (the variable `destination` below) with a 16KB
+Which then ends up in `SendFileAsync` in `src\Http\Http\src\SendFileFallback.cs` which does a basic
+File stream operation to the Kestrel response stream (the variable `destination` below) with a 16KB
 buffer, after seeking to the range offset.
 
 ```csharp
@@ -206,15 +206,15 @@ files. Our service fetches a blob from Azure Blob Storage and pipes it back to t
 
 # Streaming Azure Blob Range-Requests
 
-First we need to add the Azure Blob Storage NuGet package. We were using version 12.9.1. The project
+First we need to add the Azure Blob Storage NuGet package. We were using version 12.9.1, so the .csproj
 file contains:
 
 ```xml
 <PackageReference Include="Azure.Storage.Blobs" Version="12.9.1" />
 ```
 
-To make the web server more realistic, lets update it to use controllers. The `program.cs` is updated
-with two additional lines to look like the below:
+Now to add the ASP.NET Core controller endpoints to return the blob content. The `program.cs` is
+updated with two additional lines to look like the below:
 
 ```csharp
 var builder = WebApplication.CreateBuilder(args);
@@ -225,7 +225,7 @@ app.MapControllers();
 app.Run();
 ```
 
-And add a `Controller.cs` file with the below contents: (Yep - that's all there is again!)
+And add a `Controller.cs` file with the below contents:
 
 ```csharp
 using Microsoft.AspNetCore.Mvc;
@@ -260,10 +260,13 @@ Transfer-Encoding: chunked
 testing
 ```
 
+It's interesting to note that without the `Content-Length` header being set, it defaults to
+`Transfer-Encoding: chunked`, which makes sense.
+
 Now update the controller to return a file fetched from Azure Blob Storage. To start with, we'll use
 the most rudimentary approach possible of downloading it all into memory synchronously and then
 returning it. Update `Controller.cs` to contain the below. (You `appsettings.json`, or preferably `secrets.json`,
-should contain a `BlobUri` setting with the connection string for your Blob account):
+should contain a `BlobUri` setting with the connection string for your Azure Blob Storage account):
 
 ```csharp
 using Azure.Storage.Blobs;
@@ -294,12 +297,10 @@ public class Controller : ControllerBase
 
 Then request "https://localhost:7098/asset" in Postman (or the browser) and verify it works. (Note: 
 Here I have uploaded a 'medium.txt' file which is 1000 lines (32,000 bytes) for easier testing, as
-the 32MB responses tend to choke some tools. This I put into a container named `assets` on the Azure
-Storage account).
+the 32MB responses tend to make some tools a little slow to work with. This I put into a container
+named `assets` on the Azure Storage account).
 
-Great. So how about requesting a range? Let's try. (Note: The network traffic is showing the chunked
-encoding data now. 0x7d00 is 32,000, so the full length of the blob in these tests).
-
+Great. So how about requesting a range? Let's try.
 ```txt
 GET https://localhost:7098/asset HTTP/1.1
 Range: bytes=1024-2047
@@ -421,7 +422,8 @@ Also, this route makes no distinction for a HEAD request, (which it currently do
 we'll fix that next), which would also fetch the entire blob, even though no content would be returned.
 
 We could weave the HEAD logic in with the GET logic, but it's quite distinct, so it's cleaner just
-to separate it out into its own method.
+to separate it out into its own method. Per the spec, it doesn't need to handle `Range` requests any
+differently to a non-Range request.
 
 ```csharp
 [HttpHead("/asset")]
@@ -457,7 +459,7 @@ Server: Kestrel
 Accept-Ranges: bytes
 ```
 
-And importantly, the entire request to the Blob storage is just a few headers
+And importantly, the entire response from Blob storage for the `GetProperties` API is just a few headers:
 
 ```txt
 HEAD https://example.blob.core.windows.net/assets/medium.txt HTTP/1.1
@@ -536,7 +538,8 @@ Date: Sat, 29 Jan 2022 21:58:03 GMT
 64 is the current line      
 ```
 
-However the response to the request from the controller was a `200 OK`, not a `206 Partial` - that's not OK.
+However the response to the request from the controller was a `200 OK`, not a `206 Partial`, which
+is incorrect.
 
 ```txt
 GET https://localhost:7098/asset HTTP/1.1
@@ -563,12 +566,12 @@ Also, what we can't do is assume that if we make a range-request, that we only g
 spec, it's perfectly valid for the server it ignore the `Range` header and return the full resource in
 a `200 - OK` response, so we need to be prepared for that.
 
-Also, even if it does return a range, it may not be the one we asked for. The spec states that if any
-part of the range is satisfiable, then that should be returned. This is indeed the case with the Front
-Door service behavior we are trying to support. When it requests a resource it asks for the first 8MB
-in a `Range` header. However if the resource is smaller then 8MB, say 2KB, it will get back a `206 Partial`
-response with the header `Content-Range: bytes 0-2047/2048` indicating it got all the bytes for a 2KB
-resource.
+Another important consideration; even if it does return a range, it may not be the one we asked for.
+The spec states that if any part of the range is satisfiable, then that should be returned. This is
+indeed the case with the Front Door service behavior we are trying to support. When it requests a
+resource it asks for the first 8MB in a `Range` header. However if the resource is smaller then 8MB,
+say 2KB, it will get back a `206 Partial` response with the header `Content-Range: bytes 0-2047/2048`
+indicating it got all the bytes for a 2KB resource.
 
 ## Which Blob API to use
 
@@ -589,19 +592,20 @@ exposes all the Blob properties and HTTP response details we might need.
 
 With that, the plan is to look in the request to see if a range was requested, if so pass that range
 to `DownloadStreamingAsync` to fetch only that range from Blob storage. Once we get the response, whether
-a `200 OK` or a `206 Partial Content`, return the corresponding status, headers, and stream to the client.
+a `200 OK` or a `206 Partial Content`, return the corresponding status, headers, and content stream
+to the initial request.
 
 ## The return value
 
-The `File(...)` return value used above is not suitable here. This expects to be given a stream for the
-entire resource, and if range processing is enabled will seek within it. The stream we have here is
-(potentially) partial, and also is not seekable.
+The `File(...)` return value helper used above is not suitable here. This expects to be given a stream
+for the entire resource, and if range processing is enabled will seek within it. The stream we have
+here is (potentially) partial, and also is not seekable.
 
 I spent a while looking at the various controller return value helpers in ASP.NET Core, but ultimately
-that got a little confusing and complex, so I went back to basics. The return value from a controller
-is typically an `IActionResult`, and all this needs to do is process the response when its `ExecuteResultAsync`
-method is called. Implementing a `BlobStreamResult` class for this that simply set the status and headers,
-and then streams the content back is simple enough.
+that got a little complex and may have hid subtleties, so I went back to basics. The return value
+from a controller is typically an `IActionResult`, and all this needs to do is process the response
+when its `ExecuteResultAsync` method is called. Implementing a `BlobStreamResult` class for this that
+simply set the status and headers, and then streams the content back is simple enough.
 
 ## Cancellation
 
