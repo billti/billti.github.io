@@ -68,7 +68,6 @@ site with the below code: (_This is ALL the code you need to write a web server 
 
 ```csharp
 var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddControllers();
 var app = builder.Build();
 app.UseStaticFiles();
 app.Run();
@@ -268,7 +267,7 @@ testing
 ```
 
 It's interesting to note that without the `Content-Length` header being set, it defaults to
-`Transfer-Encoding: chunked`. This makes sense if the content length is known in advance.
+`Transfer-Encoding: chunked`. This makes sense if the content length isn't known in advance.
 
 Now update the controller to return a file fetched from Azure Blob Storage. To start with, just use
 the most rudimentary approach possible of downloading it all into memory synchronously and then
@@ -573,7 +572,7 @@ Transfer-Encoding: chunked
 0
 ```
 
-One thing to keep in mind is that the response to a range request is guaranteed to be for that range.
+One thing to keep in mind is that the response to a range request is not guaranteed to be for that range.
 Per the spec, it's perfectly valid for the server it ignore the `Range` header and return the full
 resource in a `200 - OK` response.
 
@@ -615,7 +614,7 @@ stream for the entire resource, and if range processing is enabled will seek wit
 we have here is (potentially) partial, and also is not seekable.
 
 I spent a while looking at the various controller return value helpers in ASP.NET Core, but ultimately
-that got a little complex and may have hid subtleties, so I went back to basics. The return value
+that got a little complex and may have hidden subtleties, so I went back to basics. The return value
 from a controller is typically an `IActionResult`, and all this needs to do is process the response
 when its `ExecuteResultAsync` method is called. Implementing a `BlobStreamResult` class for this that
 simply set the status and headers, and then streams the content back is simple enough.
