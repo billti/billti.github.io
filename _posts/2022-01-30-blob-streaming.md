@@ -39,13 +39,13 @@ can find some valuable or interesting information here too. (Else just skip to t
 
 # HTTP Range Requests
 
-How do you update a server to support HTTP Range requests per the RFC at
-<https://httpwg.org/specs/rfc7233.html>. (If you are not familiar with Range requests, the page
-at <https://developer.mozilla.org/en-US/docs/Web/HTTP/Range_requests> gives a good overview.  Read
-that then come back).
+HTTP Range requests are defined in the RFC at <https://httpwg.org/specs/rfc7233.html>. If you are
+not familiar with Range requests, the page at
+<https://developer.mozilla.org/en-US/docs/Web/HTTP/Range_requests> gives a good overview. Read that
+then come back.
 
-Firstly, out of the box ASP.NET Core does support range requests. It does have some minor limitation.
-For example, it does not support requesting multiple ranges in one request, such as "Range: bytes=0-50, 100-150".
+Out of the box ASP.NET Core supports range requests with some minor limitation. For example, it
+does not support requesting multiple ranges in one request, such as `Range: bytes=0-50, 100-150`.
 This is valid per the spec, but ASP.NET Core only supports requesting a single range. See the code in
 [RangeHelper.cs](https://github.com/dotnet/aspnetcore/blob/release/6.0/src/Shared/RangeHelper/RangeHelper.cs#L48) which contains:
 
@@ -61,8 +61,8 @@ This is valid per the spec, but ASP.NET Core only supports requesting a single r
     }
 ```
 
-If you spin up a simple static site with code such as the below: (_This is ALL the code you need to
-write a web server with ASP.NET Core 6!_)
+To start from scratch, spin up a simple static site with the below code: (_This is ALL the
+code you need to write a web server with ASP.NET Core 6!_)
 
 ```csharp
 var builder = WebApplication.CreateBuilder(args);
@@ -72,8 +72,8 @@ app.UseStaticFiles();
 app.Run();
 ```
 
-Then for these tests I dropped a file at `./wwwroot/large.txt` which contains a million lines of
-text, each 32 bytes long, with text stating the current line number.
+For these tests I dropped a file at `./wwwroot/large.txt` containing a million lines of
+text, each 32 bytes long, with the text on each line just stating the current line number.
 
 Using Postman to make a Range request starting on line 1001 (i.e., starting 32000 bytes in) for the
 next 1024 bytes (which equals 32 lines), the request/response is shown below.

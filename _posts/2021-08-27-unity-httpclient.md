@@ -436,6 +436,7 @@ currently in progress).
 This shows that being able to provide a "named" connection group can avoid contention and blocking
 for requests on other groups.
 
+<!--
 ## TODO
 
 - How does this interact with the Unity API for downloading assets.
@@ -443,3 +444,4 @@ for requests on other groups.
 - Show the network sockets over time being kept to a minimum with many requests.
 - Show DNS changes getting picked up.
 - Discuss connection limits to a specific service, and ServicePoint settings.
+-->
