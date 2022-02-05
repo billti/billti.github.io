@@ -4,12 +4,12 @@ title: Streaming large blobs through ASP.NET
 ---
 
 Recently I spent way too much time with a colleague digging into an issue that occurred on one of our
-services that serves largely static content through an ASP.NET Core service. The service is required
-and an intermediary in order to check authentication and do some other logic. It had been working fine
-for months with the assets we had, but suddenly starting failing with some larger downloads.
+services that serves largely static content through an ASP.NET Core service. The service is a required
+intermediary in order to check authentication and do some other logic. It had been working fine for
+months with the assets we had, but suddenly starting failing with some larger downloads.
 
 On further inspection, it was noticed that it was failing on assets over 8MB, which up to recently
-all our assets had been smaller than. When we pointed directly at the ASP.NET origin server instead
+all our assets had been less than. When we pointed directly at the ASP.NET origin server instead
 of through the CDN, the downloads also worked fine.
 
 The CDN in use is Azure Front Door. After some digging around in the docs, we found the below comments
@@ -39,10 +39,10 @@ can find some valuable or interesting information here too. (Else just skip to t
 
 # HTTP Range Requests
 
-So how do we update the server to support HTTP Range requests per the RFC
-linked to at <https://httpwg.org/specs/rfc7233.html>. (If you are not familiar with Range requests,
-the page at <https://developer.mozilla.org/en-US/docs/Web/HTTP/Range_requests> gives a good overview.
-Read that then come back).
+How do you update a server to support HTTP Range requests per the RFC at
+<https://httpwg.org/specs/rfc7233.html>. (If you are not familiar with Range requests, the page
+at <https://developer.mozilla.org/en-US/docs/Web/HTTP/Range_requests> gives a good overview.  Read
+that then come back).
 
 Firstly, out of the box ASP.NET Core does support range requests. It does have some minor limitation.
 For example, it does not support requesting multiple ranges in one request, such as "Range: bytes=0-50, 100-150".
@@ -61,8 +61,8 @@ This is valid per the spec, but ASP.NET Core only supports requesting a single r
     }
 ```
 
-If we spin up a simple static site with code such as the below: (_No, seriously, this is ALL the code
-you need to write a web server with ASP.NET Core 6!_)
+If you spin up a simple static site with code such as the below: (_This is ALL the code you need to
+write a web server with ASP.NET Core 6!_)
 
 ```csharp
 var builder = WebApplication.CreateBuilder(args);
@@ -72,11 +72,11 @@ app.UseStaticFiles();
 app.Run();
 ```
 
-I then dropped a file at `./wwwroot/large.txt` which is just a million lines of text, each 32 bytes
-long, with text stating the current line number.
+Then for these tests I dropped a file at `./wwwroot/large.txt` which contains a million lines of
+text, each 32 bytes long, with text stating the current line number.
 
 Using Postman to make a Range request starting on line 1001 (i.e., starting 32000 bytes in) for the
-next 1024 bytes (which equals 32 lines), we see a request/response as shown below.
+next 1024 bytes (which equals 32 lines), the request/response is shown below.
 
 ```txt
 GET /large.txt HTTP/1.1
@@ -105,8 +105,8 @@ Last-Modified: Sat, 29 Jan 2022 05:57:34 GMT
 1032 is the current line
 ```
 
-All good. Should I change the range header to include multiple ranges, we can verify this isn't supported
-and it simply returns the whole file as if no range was requested.
+All good. Changing the range header to include multiple ranges shows this isn't supported, and it
+simply returns the whole file as if no range was requested.
 
 ```txt
 GET /large.txt HTTP/1.1
@@ -143,11 +143,13 @@ without impacting interoperability._
 ## Sending the file contents
 
 Digging through the [ASP.NET Core 6 code](https://github.com/dotnet/aspnetcore/tree/release/6.0),
-we can see static files are served by the `StaticFileMiddleware` class in `src\Middleware\StaticFiles\src\StaticFileMiddleware.cs`.
-The meat of the work happens in method `StaticFileContext::ServeStaticFile` at `src\Middleware\StaticFiles\src\StaticFileContext.cs`.
+you can see static files are served by the `StaticFileMiddleware` class in
+[src\Middleware\StaticFiles\src\StaticFileMiddleware.cs](https://github.com/dotnet/aspnetcore/blob/release/6.0/src/Middleware/StaticFiles/src/StaticFileMiddleware.cs).
+The meat of the work happens in method `StaticFileContext::ServeStaticFile` at
+[src\Middleware\StaticFiles\src\StaticFileContext.cs](https://github.com/dotnet/aspnetcore/blob/release/6.0/src/Middleware/StaticFiles/src/StaticFileContext.cs#L294).
 
-To send the actual file we end up `StaticFileContext::SendRangeAsync`. Here it has some more interesting
-notes regarding behavior if the range is not satisfiable. Namely, the `Content-Range` header in the error response
+To send the actual file it ends up in [StaticFileContext::SendRangeAsync](https://github.com/dotnet/aspnetcore/blob/release/6.0/src/Middleware/StaticFiles/src/StaticFileContext.cs#L356).
+Here it has some more interesting notes regarding behavior if the range is not satisfiable. Namely, the `Content-Range` header in the error response
 should include an asterisk and the content length.
 
 ```csharp
@@ -164,7 +166,8 @@ For satisfiable ranges, after computing the ranges there it effectively ends up 
 await _context.Response.SendFileAsync(_fileInfo, start, length, _context.RequestAborted);
 ```
 
-This ends up in `SendFileResponseExtensions.SendFileAsyncCore` in `src\Http\Http.Extensions\src\SendFileResponseExtensions.cs`
+This ends up in `SendFileResponseExtensions.SendFileAsyncCore` in
+[src\Http\Http.Extensions\src\SendFileResponseExtensions.cs](https://github.com/dotnet/aspnetcore/blob/release/6.0/src/Http/Http.Extensions/src/SendFileResponseExtensions.cs#L146)
 and calling:
 
 ```csharp
@@ -176,9 +179,10 @@ try
 }
 ```
 
-Which then ends up in `SendFileAsync` in `src\Http\Http\src\SendFileFallback.cs` which does a basic
-File stream operation to the Kestrel response stream (the variable `destination` below) with a 16KB
-buffer, after seeking to the range offset.
+This then ends up in `SendFileAsync` in
+[src\Http\Http\src\SendFileFallback.cs](https://github.com/dotnet/aspnetcore/blob/release/6.0/src/Http/Http/src/SendFileFallback.cs#L28)
+which does a basic File stream operation to the Kestrel response stream (the variable `destination`
+below) with a 16KB buffer, after seeking to the range offset.
 
 ```csharp
 const int bufferSize = 1024 * 16;
@@ -201,19 +205,20 @@ using (fileStream)
 When the await on the last statement above completes, the response has been sent. Everything unwinds
 and the streams (file and response) are disposed.
 
-So your generic static file serving works fine for HTTP range requests. But we weren't serving static
-files. Our service fetches a blob from Azure Blob Storage and pipes it back to the client. How should this work?
+So generic static file serving works fine for HTTP range requests. But in my problematic scenario we
+weren't serving static files. Our service fetches a blob from Azure Blob Storage and pipes it back
+to the client. How should this work?
 
 # Streaming Azure Blob Range-Requests
 
-First we need to add the Azure Blob Storage NuGet package. We were using version 12.9.1, so the .csproj
+First you need to add the Azure Blob Storage NuGet package. We were using version 12.9.1, so the .csproj
 file contains:
 
 ```xml
 <PackageReference Include="Azure.Storage.Blobs" Version="12.9.1" />
 ```
 
-Now to add the ASP.NET Core controller endpoints to return the blob content. The `program.cs` is
+To add the ASP.NET Core controller endpoints to return the blob content, the `program.cs` is
 updated with two additional lines to look like the below:
 
 ```csharp
@@ -225,7 +230,7 @@ app.MapControllers();
 app.Run();
 ```
 
-And add a `Controller.cs` file with the below contents:
+And a `Controller.cs` file with the below contents is added:
 
 ```csharp
 using Microsoft.AspNetCore.Mvc;
@@ -261,12 +266,13 @@ testing
 ```
 
 It's interesting to note that without the `Content-Length` header being set, it defaults to
-`Transfer-Encoding: chunked`, which makes sense.
+`Transfer-Encoding: chunked`. This makes sense if the content length is known in advance.
 
-Now update the controller to return a file fetched from Azure Blob Storage. To start with, we'll use
+Now update the controller to return a file fetched from Azure Blob Storage. To start with, just use
 the most rudimentary approach possible of downloading it all into memory synchronously and then
-returning it. Update `Controller.cs` to contain the below. (You `appsettings.json`, or preferably `secrets.json`,
-should contain a `BlobUri` setting with the connection string for your Azure Blob Storage account):
+returning it. Update `Controller.cs` to contain the below. (Your `appsettings.json`, or preferably
+`secrets.json`, should contain a `BlobUri` setting with the connection string for your Azure Blob
+Storage account):
 
 ```csharp
 using Azure.Storage.Blobs;
@@ -297,10 +303,11 @@ public class Controller : ControllerBase
 
 Then request "https://localhost:7098/asset" in Postman (or the browser) and verify it works. (Note: 
 Here I have uploaded a 'medium.txt' file which is 1000 lines (32,000 bytes) for easier testing, as
-the 32MB responses tend to make some tools a little slow to work with. This I put into a container
+the 32MB responses tend to make some tools a little slow to work with. I put this into a container
 named `assets` on the Azure Storage account).
 
-Great. So how about requesting a range? Let's try.
+Trying requesting a range, and you should see output similar to:
+
 ```txt
 GET https://localhost:7098/asset HTTP/1.1
 Range: bytes=1024-2047
@@ -327,9 +334,8 @@ Transfer-Encoding: chunked
 0
 
 ```
-
-Here we can see it is just fetching the entire blob are returning it. The controller needs to return
-a File with a stream that is seekable in order to be able to satify a request for a range within in.
+Here it is just fetching the entire blob are returning it. The controller needs to return a File
+with a stream that is seekable in order to be able to satify a request for a range within in.
 Change the controller method to just the below:
 
 ```csharp
@@ -342,7 +348,7 @@ public IActionResult GetAsset()
 }
 ```
 
-Now we see the expect request/response for just a portion of the blob!
+Now you should see the expect request/response for just a portion of the blob!
 
 ```txt
 GET https://localhost:7098/asset HTTP/1.1
@@ -370,16 +376,16 @@ Content-Range: bytes 1024-2047/32000
 ```
 
 The `File` class being returned by the controller here is ultimately using much of the same code as
-the static file middleware uses. It effectively expects to be given a seekable stream, and if range
-processing is enabled, will use the headers in the request to figure out the correct partial response
-to return. Neat!
+the static file middleware show before. It effectively expects to be given a seekable stream, and if
+range processing is enabled, will use the headers in the request to figure out the correct partial
+response to return. Nice!
 
 ## Remaining problems
 
-This still has many problems however. Chief amonst them being that the method is synchronously downloading
-the entire blob from storage, no matter how small a range we are requesting. Using Fiddler to observe
-traffic to blob storage, we see the below for the above range request. (I'll show all headers here,
-but trim them for later examples).
+This still has several problems however. Chief amonst them being that the method is synchronously
+downloading the entire blob from storage, no matter how small a range we are requesting. Using
+Fiddler to observe traffic to blob storage, the below can be seen for the above range request.
+(I'll show all headers here, but trim them for later examples).
 
 ```txt
 GET https://example.blob.core.windows.net/assets/medium.txt HTTP/1.1
@@ -419,11 +425,13 @@ Date: Sat, 29 Jan 2022 18:19:00 GMT
 ```
 
 Also, this route makes no distinction for a HEAD request, (which it currently doesn't support, but
-we'll fix that next), which would also fetch the entire blob, even though no content would be returned.
+we'll fix that next), where you wouldn't want to fetch the entire blob as no response body should
+be returned.
 
-We could weave the HEAD logic in with the GET logic, but it's quite distinct, so it's cleaner just
+You could weave the HEAD logic in with the GET logic, but it's quite distinct, so it's cleaner just
 to separate it out into its own method. Per the spec, it doesn't need to handle `Range` requests any
-differently to a non-Range request.
+differently to a non-Range request, so just indicating the content length and type, and indicating
+support for range-requests (with the header `Accept-Ranges: bytes`) should be sufficient.
 
 ```csharp
 [HttpHead("/asset")]
@@ -440,7 +448,7 @@ public async Task<IActionResult> HeadAsset()
 }
 ```
 
-Using Fiddler we see the request and response as expected:
+Now Fiddler shows the request and response as expected:
 
 ```txt
 HEAD https://localhost:7098/asset HTTP/1.1
@@ -459,7 +467,8 @@ Server: Kestrel
 Accept-Ranges: bytes
 ```
 
-And importantly, the entire response from Blob storage for the `GetProperties` API is just a few headers:
+And importantly, the entire response from the request to Blob storage for the `GetProperties` call
+is just a few headers:
 
 ```txt
 HEAD https://example.blob.core.windows.net/assets/medium.txt HTTP/1.1
@@ -483,9 +492,9 @@ x-ms-creation-time: Sat, 29 Jan 2022 08:02:17 GMT
 ... <a few other x-ms-* headers, but no body> ...
 ```
 
-Now onto the real challenge. Efficiently and correctly streaming the blob contents, including range-requests.
+Now for the real challenge. Efficiently and correctly streaming the blob contents, including range-requests.
 
-Let's have a first attempt:
+Here was my first attempt:
 
 ```csharp
 [HttpGet("/asset")]
@@ -521,7 +530,7 @@ public async Task<IActionResult> GetAsset(CancellationToken ct)
 }
 ```
 
-In requesting a range from 1024-2047 I can see the underlying blob storage request was perfect
+In requesting a range from 1024-2047, the underlying blob storage request was perfect:
 
 ```txt
 HTTP/1.1 206 Partial Content
@@ -562,44 +571,46 @@ Transfer-Encoding: chunked
 0
 ```
 
-Also, what we can't do is assume that if we make a range-request, that we only get that range back. Per the
-spec, it's perfectly valid for the server it ignore the `Range` header and return the full resource in
-a `200 - OK` response, so we need to be prepared for that.
+One thing to keep in mind is that the response to a range request is guaranteed to be for that range.
+Per the spec, it's perfectly valid for the server it ignore the `Range` header and return the full
+resource in a `200 - OK` response.
 
-Another important consideration; even if it does return a range, it may not be the one we asked for.
+Another important consideration; even if it does return a range, it may not be the range asked for.
 The spec states that if any part of the range is satisfiable, then that should be returned. This is
-indeed the case with the Front Door service behavior we are trying to support. When it requests a
-resource it asks for the first 8MB in a `Range` header. However if the resource is smaller then 8MB,
-say 2KB, it will get back a `206 Partial` response with the header `Content-Range: bytes 0-2047/2048`
-indicating it got all the bytes for a 2KB resource.
+indeed the case with the Front Door service behavior I was trying to support. When Front Door
+requests a resource it asks for the first 8MB in a `Range` header. However if the resource is
+smaller then 8MB, say 2KB, the response will be a `206 Partial` response with the header
+`Content-Range: bytes 0-2047/2048`, indicating that it returned all the bytes for a 2KB resource.
 
 ## Which Blob API to use
 
-There are several different APIs that can be used when fetching a blob with the Azure SDK. The difference
-between some of them, and when to use them, is outlined in the GitHub issue at <https://github.com/Azure/azure-sdk-for-net/issues/22022#issuecomment-870054035>
+There are several different APIs that can be used when fetching a blob with the Azure SDK. The
+difference between some of them, and when to use them, is outlined in the GitHub issue at
+<https://github.com/Azure/azure-sdk-for-net/issues/22022#issuecomment-870054035>
 
-As it states, `DownloadContentAsync` is for smaller downloads, which is not what we are dealing with here.
-`DownloadToAsync` writes to a stream or a file, but doesn't allow you to specify just a range to fetch.
+As it states, `DownloadContentAsync` is for smaller downloads, which is not what we are dealing with
+here. `DownloadToAsync` writes to a stream or a file, but doesn't allow you to specify just a range
+to fetch.
 
-`OpenReadAsync` does give you a seekable stream, which means you could potentially just pass it to the `File`
-helper as the return value. However all you get here is a stream, so accessing other properties on the
-blob such as the content-type etc. is not possible, thus we'd need to make another call to `GetPropertiesAsync`
-to fetch that info as we did for HEAD requests, and having an extra round trip to Azure Storage on each
-request is undesireable.
+`OpenReadAsync` does give you a seekable stream, which means you could potentially just pass it to
+the `File` helper as the return value. However all you get here is a stream, so accessing other
+properties on the blob such as the content-type etc. is not possible, thus you would need to make
+another call to `GetPropertiesAsync` to fetch that info as done above for HEAD requests, and having
+an extra round trip to Azure Storage on each request is undesireable.
 
-That leaves `DownloadStreamingAsync`, which accepts a range to fetch, and also has a return type which
-exposes all the Blob properties and HTTP response details we might need.
+That leaves `DownloadStreamingAsync`, which accepts a range to fetch, and also has a return type
+which exposes all the Blob properties and HTTP response details we might need.
 
-With that, the plan is to look in the request to see if a range was requested, if so pass that range
-to `DownloadStreamingAsync` to fetch only that range from Blob storage. Once we get the response, whether
-a `200 OK` or a `206 Partial Content`, return the corresponding status, headers, and content stream
-to the initial request.
+With that, one approach is to look in the request to see if a range was requested, if so pass that
+range to `DownloadStreamingAsync` to fetch only that range from Blob storage. When the response is
+returned, whether a `200 OK` or a `206 Partial Content`, return the corresponding status, headers,
+and content stream to the initial request.
 
-## The return value
+## The Controller return value
 
-The `File(...)` return value helper used above is not suitable here. This expects to be given a stream
-for the entire resource, and if range processing is enabled will seek within it. The stream we have
-here is (potentially) partial, and also is not seekable.
+The `File(...)` return value helper used above is not suitable here. This expects to be given a
+stream for the entire resource, and if range processing is enabled will seek within it. The stream
+we have here is (potentially) partial, and also is not seekable.
 
 I spent a while looking at the various controller return value helpers in ASP.NET Core, but ultimately
 that got a little complex and may have hid subtleties, so I went back to basics. The return value
@@ -609,14 +620,15 @@ simply set the status and headers, and then streams the content back is simple e
 
 ## Cancellation
 
-An important consideration that is often overlooked is cancellation. For each request to ASP.NET Core, there is a cancellation
-token attached. It turns out requests will often be terminated early, be it for cancelling a download,
-navigating elsewhere, the app crashing, or even potentially in some types of attacks. If this cancellation token is not
-passed on to the calls to blob storage, then even if the client aborts the request after a couple of packets,
-the service will still continue to download the full blob.
+An important consideration that is often overlooked is cancellation. For each request to ASP.NET Core,
+there is a cancellation token attached. In general usage requests will often be terminated early, be it
+for cancelling a download, navigating the browser elsewhere before it finished loaded, the app
+crashing, or even potentially in some types of attacks. If this cancellation token is not passed on
+to the calls to blob storage, then even if the client aborts the request after a couple of packets,
+the Controller will still continue to download the full blob.
 
 I wrote up a simple client to test this as shown below, which requests a large asset from the controller,
-and then after fetching 4KB of data kills the request.
+and then after fetching the first 4KB of data kills the request.
 
 ```csharp
 var client = new HttpClient();
@@ -628,16 +640,17 @@ request.Dispose();
 ```
 
 Using Wireshark to monitor traffic, and __WITHOUT__ the CancellationToken being passed to the Blob API
-calls, I can see the service still goes on to fetch all 32MB from Azure Storage.
+calls, the service still goes on to fetch all 32MB from Azure Storage.
 
 <img src="/assets/images/wireshark-no-cancellation.png"/>
 
-After chaining through the CancellationToken from the request to the Blob API calls, I can see that
-when running the same test the service connection to Azure Storage gets reset and the download aborted after about 200KB.
+After chaining through the CancellationToken from the request to the Blob API calls, when running the
+same test the service connection to Azure Storage gets reset and the download aborted after about 200KB.
 
 <img src="/assets/images/wireshark-with-cancellation.png"/>
 
-Another important hygine consideration is to ensure the Blob stream is disposed once the response is sent.
+Another important hygine consideration is to ensure the Blob stream is disposed once the response is
+sent, else the blob stream and resulting connection remain active until garbage collected.
 
 # The Final Code
 
@@ -645,14 +658,17 @@ After all the above, the below is where I ended up. This seems to satisfy all th
 streaming immutable blobs from Azure Storage through an ASP.NET Core controller, while supporting
 Range-Requests in an efficient and correct manner. At 130 lines of code it's not too complex.
 
-This does have a few pre-conditions to be aware of.
+This does have a few pre-conditions to be aware of should you choose to reuse it:
 
 - This is for streaming immutable resources, hence the etags and cache-control headers being set to
-  specific values, and request headers like `if-modified-since` being largely ignored. If serving mutable resources,
-  then your logic will need to support that.
-- This does expect that Blob Storage calls always return Content-Length and Content-Type headers, and not something
-  like a chunked encoding response. The docs do state [the response has these headers](https://docs.microsoft.com/en-us/rest/api/storageservices/get-blob#response-headers),
+  specific values, and request headers like `if-modified-since` being largely ignored. If serving
+  mutable resources then the code will need to be updated to support that.
+- This does expect that Blob Storage calls always return Content-Length and Content-Type headers,
+  and not something like a chunked encoding response. The docs do state 
+  [the response has these headers](https://docs.microsoft.com/en-us/rest/api/storageservices/get-blob#response-headers),
   so I'm going to make that assumption here. (And it my testing that is the case).
+
+Hopefully this was informative and useful. It was certainly a lot more involved that I expected!
 
 ```csharp
 using Azure;
