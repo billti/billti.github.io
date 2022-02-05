@@ -39,6 +39,8 @@ can find some valuable or interesting information here too. (Else just skip to t
 
 # HTTP Range Requests
 
+First, what are HTTP Range Requests and what support does ASP.NET Core have for them?
+
 HTTP Range requests are defined in the RFC at <https://httpwg.org/specs/rfc7233.html>. If you are
 not familiar with Range requests, the page at
 <https://developer.mozilla.org/en-US/docs/Web/HTTP/Range_requests> gives a good overview. Read that
@@ -61,8 +63,8 @@ This is valid per the spec, but ASP.NET Core only supports requesting a single r
     }
 ```
 
-To start from scratch, spin up a simple static site with the below code: (_This is ALL the
-code you need to write a web server with ASP.NET Core 6!_)
+To start from scratch and experiment with range-requests on static files, spin up a simple static
+site with the below code: (_This is ALL the code you need to write a web server with ASP.NET Core 6!_)
 
 ```csharp
 var builder = WebApplication.CreateBuilder(args);
@@ -149,8 +151,8 @@ The meat of the work happens in method `StaticFileContext::ServeStaticFile` at
 [src\Middleware\StaticFiles\src\StaticFileContext.cs](https://github.com/dotnet/aspnetcore/blob/release/6.0/src/Middleware/StaticFiles/src/StaticFileContext.cs#L294).
 
 To send the actual file it ends up in [StaticFileContext::SendRangeAsync](https://github.com/dotnet/aspnetcore/blob/release/6.0/src/Middleware/StaticFiles/src/StaticFileContext.cs#L356).
-Here it has some more interesting notes regarding behavior if the range is not satisfiable. Namely, the `Content-Range` header in the error response
-should include an asterisk and the content length.
+Here it has some more interesting notes regarding behavior if the range is not satisfiable.
+Namely, the `Content-Range` header in the error response should include an asterisk and the content length.
 
 ```csharp
 // 14.16 Content-Range - A server sending a response with status code 416 (Requested range not satisfiable)
